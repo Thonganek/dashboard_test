@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Analytics Dashboard</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #fff7ed; } /* Orange-50 background */
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 1.5rem; transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        .chart-container-sm { position: relative; height: 250px; width: 100%; }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ea580c; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #c2410c; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Navbar -->
+    <nav class="bg-gradient-to-r from-orange-700 to-orange-600 text-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-heart-pulse text-2xl"></i>
+                <div>
+                    <h1 class="text-xl font-bold">ระบบสารสนเทศสุขภาพผู้ป่วย</h1>
+                    <p class="text-xs text-orange-100">Patient Health Analytics Dashboard</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="dataStatus" class="text-xs bg-orange-800 px-2 py-1 rounded hidden"><i class="fa-solid fa-cloud-arrow-down animate-bounce"></i> กำลังโหลดข้อมูล...</span>
+                <button onclick="document.getElementById('fileInput').click()" class="bg-orange-500 hover:bg-orange-400 text-white px-3 py-1.5 rounded text-sm transition shadow">
+                    <i class="fa-solid fa-file-csv mr-1"></i> นำเข้าไฟล์ CSV
+                </button>
+                <input type="file" id="fileInput" accept=".csv" class="hidden" onchange="handleFileUpload(event)">
+                
+                <button id="loginBtn" onclick="toggleLoginModal()" class="bg-white text-orange-700 hover:bg-gray-100 px-4 py-1.5 rounded font-bold text-sm transition shadow">
+                    <i class="fa-solid fa-lock mr-1"></i> เข้าสู่ระบบ
+                </button>
+                <button id="logoutBtn" onclick="logout()" class="hidden bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded font-bold text-sm transition shadow">
+                    <i class="fa-solid fa-right-from-bracket mr-1"></i> ออกจากระบบ
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-6">
+
+        <!-- Filters Section -->
+        <div class="card mb-6 border-l-4 border-orange-500">
+            <h3 class="text-lg font-bold text-orange-800 mb-3"><i class="fa-solid fa-filter mr-2"></i>ค้นหาและกรองข้อมูล (Search & Filter)</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Search Bar added here -->
+                <div class="md:col-span-4 mb-2">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-search text-gray-400"></i>
+                        </div>
+                        <input type="text" id="searchInput" onkeyup="applyFilters()" placeholder="พิมพ์ชื่อ, นามสกุล หรือ รหัสคนไข้ เพื่อค้นหา..." 
+                               class="w-full pl-10 border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring focus:ring-orange-200 p-2 bg-gray-50 text-gray-700">
+                    </div>
+                </div>
+
+                <select id="filterRights" onchange="applyFilters()" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring focus:ring-orange-200 p-2 bg-gray-50">
+                    <option value="all">ทุกสิทธิ์การรักษา</option>
+                </select>
+                <select id="filterTambon" onchange="applyFilters()" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring focus:ring-orange-200 p-2 bg-gray-50">
+                    <option value="all">ทุกตำบล</option>
+                </select>
+                <select id="filterGender" onchange="applyFilters()" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring focus:ring-orange-200 p-2 bg-gray-50">
+                    <option value="all">เพศทั้งหมด</option>
+                    <option value="ชาย">ชาย</option>
+                    <option value="หญิง">หญิง</option>
+                </select>
+                <select id="filterStatus" onchange="applyFilters()" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring focus:ring-orange-200 p-2 bg-gray-50">
+                    <option value="all">ทุกสถานะการติดตาม</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="card bg-gradient-to-br from-orange-500 to-orange-600 text-white border-none">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-orange-100 text-sm">ผู้ป่วยทั้งหมด</p>
+                        <h2 class="text-3xl font-bold" id="kpiTotal">0</h2>
+                    </div>
+                    <i class="fa-solid fa-users text-4xl opacity-50"></i>
+                </div>
+            </div>
+            <div class="card bg-white border-l-4 border-blue-500">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-500 text-sm">อายุเฉลี่ย</p>
+                        <h2 class="text-3xl font-bold text-blue-600" id="kpiAvgAge">0</h2>
+                        <span class="text-xs text-gray-400">ปี</span>
+                    </div>
+                    <i class="fa-solid fa-cake-candles text-3xl text-blue-300"></i>
+                </div>
+            </div>
+            <div class="card bg-white border-l-4 border-green-500">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-500 text-sm">ติดตามได้ปกติ</p>
+                        <h2 class="text-3xl font-bold text-green-600" id="kpiFollowUp">0</h2>
+                        <span class="text-xs text-gray-400">คน</span>
+                    </div>
+                    <i class="fa-solid fa-user-check text-3xl text-green-300"></i>
+                </div>
+            </div>
+            <div class="card bg-white border-l-4 border-red-500">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-500 text-sm">BMI เกินเกณฑ์ (>25)</p>
+                        <h2 class="text-3xl font-bold text-red-600" id="kpiHighBMI">0</h2>
+                        <span class="text-xs text-gray-400">คน</span>
+                    </div>
+                    <i class="fa-solid fa-weight-scale text-3xl text-red-300"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid 1: Demographics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="card md:col-span-2">
+                <h4 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">ช่วงอายุ (Age Distribution)</h4>
+                <div class="chart-container">
+                    <canvas id="ageChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h4 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">สัดส่วนเพศ</h4>
+                <div class="chart-container-sm flex justify-center">
+                    <canvas id="genderChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid 2: Rights & Diagnosis -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="card">
+                <h4 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">ประเภทสิทธิ์การรักษา</h4>
+                <div class="chart-container">
+                    <canvas id="rightsChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h4 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">การวินิจฉัยหลัก (Top Diagnosis)</h4>
+                <div class="chart-container">
+                    <canvas id="diagnosisChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid 3: Clinical Data (Orange Theme Intensifies) -->
+        <h3 class="text-xl font-bold text-orange-800 mb-4 border-l-4 border-orange-600 pl-3">ข้อมูลทางคลินิก (Clinical Statistics)</h3>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <!-- Row 1 -->
+            <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">ความดันตัวบน (Systolic)</h5>
+                <div class="h-40"><canvas id="bpSysChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">ความดันตัวล่าง (Diastolic)</h5>
+                <div class="h-40"><canvas id="bpDiaChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">ดัชนีมวลกาย (BMI)</h5>
+                <div class="h-40"><canvas id="bmiChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">ระดับน้ำตาล (FBS)</h5>
+                <div class="h-40"><canvas id="fbsChart"></canvas></div>
+            </div>
+            <!-- Row 2 -->
+             <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">น้ำตาลสะสม (HbA1c)</h5>
+                <div class="h-40"><canvas id="hba1cChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">ค่าไต (eGFR)</h5>
+                <div class="h-40"><canvas id="egfrChart"></canvas></div>
+            </div>
+             <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">น้ำหนัก (Weight)</h5>
+                <div class="h-40"><canvas id="weightChart"></canvas></div>
+            </div>
+             <div class="card">
+                <h5 class="font-semibold text-gray-600 text-sm mb-2">ส่วนสูง (Height)</h5>
+                <div class="h-40"><canvas id="heightChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Charts Grid 4: Status & Tables -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="card">
+                <h4 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">สถานะการติดตาม</h4>
+                <div class="chart-container-sm flex justify-center">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+            <div class="card md:col-span-2 overflow-hidden">
+                <h4 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">สรุปข้อมูลที่อยู่ (Top Tambon)</h4>
+                <div class="overflow-y-auto h-64">
+                    <table class="min-w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-orange-100 sticky top-0">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">ตำบล</th>
+                                <th scope="col" class="px-6 py-3">จำนวน (คน)</th>
+                                <th scope="col" class="px-6 py-3 text-right">%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tambonTableBody">
+                            <!-- Data populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Medication Table -->
+        <div class="card mb-6">
+            <h4 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">ข้อมูลการใช้ยา (Medications)</h4>
+             <div class="overflow-y-auto h-64">
+                <table class="min-w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-orange-100 sticky top-0">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">ชื่อยา / กลุ่มยา</th>
+                            <th scope="col" class="px-6 py-3">จำนวนผู้ใช้ (คน)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="medsTableBody">
+                        <!-- Data populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Admin Section (Hidden by default) -->
+        <div id="adminSection" class="hidden animate-fade-in-up">
+            <div class="card border-t-4 border-orange-800">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-2xl font-bold text-orange-800"><i class="fa-solid fa-database mr-2"></i>จัดการข้อมูลผู้ป่วย (Admin Only)</h3>
+                    <button onclick="openModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow flex items-center">
+                        <i class="fa-solid fa-plus mr-2"></i> เพิ่มข้อมูลใหม่
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto shadow-md sm:rounded-lg">
+                    <table class="w-full text-sm text-left text-gray-500" id="patientTable">
+                        <thead class="text-xs text-white uppercase bg-orange-600">
+                            <tr>
+                                <th class="px-4 py-3">รหัส</th>
+                                <th class="px-4 py-3">ชื่อ-สกุล</th>
+                                <th class="px-4 py-3">อายุ</th>
+                                <th class="px-4 py-3">สิทธิ์</th>
+                                <th class="px-4 py-3">วินิจฉัย</th>
+                                <th class="px-4 py-3">BP</th>
+                                <th class="px-4 py-3">HbA1c</th>
+                                <th class="px-4 py-3">สถานะ</th>
+                                <th class="px-4 py-3 text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="patientTableBody">
+                            <!-- Rows -->
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Pagination -->
+                 <div class="flex justify-between items-center mt-4">
+                    <span class="text-sm text-gray-700">แสดง <span id="startIndex">0</span> ถึง <span id="endIndex">0</span> จาก <span id="totalIndex">0</span> รายการ</span>
+                    <div class="inline-flex mt-2 xs:mt-0">
+                        <button onclick="prevPage()" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-l hover:bg-orange-700">Prev</button>
+                        <button onclick="nextPage()" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-r border-0 border-l border-orange-700 hover:bg-orange-700">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50 flex justify-center items-center">
+        <div class="relative p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100">
+                    <i class="fa-solid fa-user-lock text-orange-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2">ผู้ดูแลระบบ</h3>
+                <div class="mt-2 px-7 py-3">
+                    <input id="username" type="text" placeholder="Username" class="mb-3 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
+                    <input id="password" type="password" placeholder="Password" class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="ok-btn" onclick="checkLogin()" class="px-4 py-2 bg-orange-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300">
+                        Login
+                    </button>
+                    <button onclick="toggleLoginModal()" class="mt-2 px-4 py-2 bg-gray-200 text-gray-700 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit/Add Modal -->
+    <div id="dataModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-medium" id="modalTitle">เพิ่ม/แก้ไข ข้อมูล</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <form id="dataForm" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="hidden" id="editRowIndex">
+                <div><label class="block text-sm">รหัส</label><input type="text" id="inp_id" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">ชื่อ</label><input type="text" id="inp_name" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">สกุล</label><input type="text" id="inp_surname" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">อายุ</label><input type="number" id="inp_age" class="w-full border p-2 rounded"></div>
+                <div>
+                    <label class="block text-sm">เพศ</label>
+                    <select id="inp_gender" class="w-full border p-2 rounded">
+                        <option value="ชาย">ชาย</option>
+                        <option value="หญิง">หญิง</option>
+                    </select>
+                </div>
+                <div><label class="block text-sm">ตำบล</label><input type="text" id="inp_tambon" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">สิทธิ์</label><input type="text" id="inp_rights" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">การวินิจฉัย</label><input type="text" id="inp_diag" class="w-full border p-2 rounded"></div>
+                <div class="col-span-2 border-t mt-2 pt-2 text-orange-600 font-bold">ข้อมูลคลินิก</div>
+                <div><label class="block text-sm">BP บน</label><input type="number" id="inp_bpsys" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">BP ล่าง</label><input type="number" id="inp_bpdia" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">น้ำหนัก (kg)</label><input type="number" id="inp_weight" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">ส่วนสูง (cm)</label><input type="number" id="inp_height" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">FBS</label><input type="number" id="inp_fbs" class="w-full border p-2 rounded"></div>
+                <div><label class="block text-sm">HbA1c</label><input type="number" step="0.1" id="inp_hba1c" class="w-full border p-2 rounded"></div>
+                
+                <div><label class="block text-sm">ยาที่ได้รับ</label><input type="text" id="inp_meds" class="w-full border p-2 rounded"></div>
+                
+                <div><label class="block text-sm">สถานะ</label><input type="text" id="inp_status" class="w-full border p-2 rounded"></div>
+            </form>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">ยกเลิก</button>
+                <button onclick="saveData()" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // --- Configuration ---
+        // REPLACE THIS URL with your actual Google Apps Script Web App URL
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1bg9M-5Ri0YJnjFb-Bw5HDySjQ9vM9No0gLIGQQu0Q92kpJdkOOS-8hmqQhrftHMqYQ/exec";
+        
+        // --- Global State ---
+        let allData = []; // Stores all patient objects
+        let filteredData = [];
+        let chartInstances = {};
+        let isAdmin = false;
+        let currentPage = 1;
+        const itemsPerPage = 10;
+
+        // --- Initialization ---
+        window.onload = function() {
+            fetchGoogleSheetData();
+        };
+
+        // --- Data Fetching (Using JSONP) ---
+        // New: Helper function to fetch JSONP (Bypasses CORS for GET requests)
+        function fetchJSONP(url) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+                
+                // Define global callback function
+                window[callbackName] = function(data) {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    resolve(data);
+                };
+                
+                // Error handling
+                script.onerror = function() {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    reject('Script load error');
+                };
+
+                // Append callback parameter
+                const separator = url.indexOf('?') >= 0 ? '&' : '?';
+                script.src = url + separator + 'callback=' + callbackName;
+                document.body.appendChild(script);
+            });
+        }
+
+        async function fetchGoogleSheetData() {
+            const statusEl = document.getElementById('dataStatus');
+            statusEl.classList.remove('hidden');
+            statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังดึงข้อมูล...';
+
+            try {
+                // Use JSONP instead of standard fetch
+                const json = await fetchJSONP(GOOGLE_SCRIPT_URL);
+                
+                let rawData = json.data ? json.data : json;
+                
+                if (Array.isArray(rawData) && rawData.length > 0) {
+                     processData(rawData);
+                     statusEl.innerHTML = '<i class="fa-solid fa-check"></i> เชื่อมต่อข้อมูลสำเร็จ';
+                     setTimeout(() => statusEl.classList.add('hidden'), 3000);
+                } else {
+                    console.log("Empty data");
+                    statusEl.innerHTML = 'ไม่พบข้อมูล';
+                }
+
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                statusEl.classList.remove('hidden');
+                statusEl.className = "text-xs bg-red-600 text-white px-2 py-1 rounded";
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> โหลดไม่ได้';
+                
+                // ERROR SUPPRESSED: No SweetAlert popup here as requested.
+                // Just showing status bar error.
+            }
+        }
+
+        // --- CSV Upload Handler ---
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const json = csvToJson(text);
+                processData(json);
+                Swal.fire({
+                    icon: 'success',
+                    title: 'นำเข้าข้อมูลสำเร็จ',
+                    text: `โหลดข้อมูล ${json.length} รายการ`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            };
+            reader.readAsText(file);
+        }
+
+        function csvToJson(csv) {
+            const lines = csv.split(/\r\n|\n/);
+            const headers = lines[0].split(',').map(h => h.trim());
+            const result = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i]) continue;
+                // Complex regex to handle commas inside quotes
+                const currentline = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+                const simpleSplit = lines[i].split(',');
+                
+                const row = currentline && currentline.length >= headers.length ? currentline : simpleSplit;
+                
+                if(row.length < 5) continue;
+
+                // Mapping based on the CSV structure
+                const obj = {
+                    id: cleanStr(row[0]),
+                    name: cleanStr(row[1]),
+                    surname: cleanStr(row[2]),
+                    age: parseInt(cleanStr(row[3])) || 0,
+                    gender: cleanStr(row[4]),
+                    tambon: cleanStr(row[5]),
+                    rights: cleanStr(row[7]),
+                    diagnosis: cleanStr(row[8]),
+                    bp_sys: parseInt(cleanStr(row[9])) || 0,
+                    bp_dia: parseInt(cleanStr(row[10])) || 0,
+                    weight: parseFloat(cleanStr(row[11])) || 0,
+                    height: parseFloat(cleanStr(row[12])) || 0,
+                    bmi: parseFloat(cleanStr(row[13])) || 0,
+                    fbs: parseInt(cleanStr(row[14])) || 0,
+                    hba1c: parseFloat(cleanStr(row[15])) || 0,
+                    egfr: parseFloat(cleanStr(row[16])) || 0,
+                    meds: cleanStr(row[19]),
+                    status: cleanStr(row[20])
+                };
+                result.push(obj);
+            }
+            return result;
+        }
+
+        function cleanStr(str) {
+            if (!str) return "";
+            return str.replace(/^"|"$/g, '').trim();
+        }
+
+        // --- Core Data Processing ---
+        function processData(data) {
+            allData = data;
+            populateFilters();
+            applyFilters(); 
+        }
+
+        function populateFilters() {
+            const rights = [...new Set(allData.map(d => d.rights))].sort();
+            const tambons = [...new Set(allData.map(d => d.tambon))].sort();
+            const statuses = [...new Set(allData.map(d => d.status))].sort();
+
+            fillSelect('filterRights', rights);
+            fillSelect('filterTambon', tambons);
+            fillSelect('filterStatus', statuses);
+        }
+
+        function fillSelect(id, items) {
+            const sel = document.getElementById(id);
+            sel.innerHTML = sel.options[0].outerHTML; 
+            items.forEach(i => {
+                if(i) {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = i;
+                    sel.appendChild(opt);
+                }
+            });
+        }
+
+        function applyFilters() {
+            const r = document.getElementById('filterRights').value;
+            const t = document.getElementById('filterTambon').value;
+            const g = document.getElementById('filterGender').value;
+            const s = document.getElementById('filterStatus').value;
+            // Search Input Logic
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+
+            filteredData = allData.filter(d => {
+                const matchDropdowns = (r === 'all' || d.rights === r) &&
+                                       (t === 'all' || d.tambon === t) &&
+                                       (g === 'all' || d.gender === g) &&
+                                       (s === 'all' || d.status === s);
+                
+                // Search Logic (Match ID, Name, Surname)
+                const matchSearch = !search || 
+                                    d.name.toLowerCase().includes(search) || 
+                                    d.surname.toLowerCase().includes(search) || 
+                                    d.id.toLowerCase().includes(search);
+
+                return matchDropdowns && matchSearch;
+            });
+
+            renderDashboard();
+            if (isAdmin) renderTable();
+        }
+
+        // --- Dashboard Rendering ---
+        function renderDashboard() {
+            // KPIs
+            document.getElementById('kpiTotal').innerText = filteredData.length.toLocaleString();
+            const avgAge = filteredData.length ? (filteredData.reduce((a,b)=>a+b.age,0)/filteredData.length).toFixed(1) : 0;
+            document.getElementById('kpiAvgAge').innerText = avgAge;
+            document.getElementById('kpiFollowUp').innerText = filteredData.filter(d => d.status && d.status.includes('ยังติดตาม')).length.toLocaleString();
+            document.getElementById('kpiHighBMI').innerText = filteredData.filter(d => d.bmi >= 25).length.toLocaleString();
+
+            // Charts
+            drawAgeChart();
+            drawGenderChart();
+            drawRightsChart();
+            drawDiagnosisChart();
+            drawClinicalCharts();
+            drawStatusChart();
+            renderTambonTable();
+            renderMedsTable();
+        }
+
+        // --- Chart Helpers ---
+        function destroyChart(id) {
+            if (chartInstances[id]) { chartInstances[id].destroy(); }
+        }
+
+        function getFrequency(dataArray, key) {
+            const counts = {};
+            dataArray.forEach(d => {
+                const val = d[key] || 'ไม่ระบุ';
+                counts[val] = (counts[val] || 0) + 1;
+            });
+            return counts;
+        }
+
+        function getBins(dataArray, key, bins) {
+            const counts = new Array(bins.length).fill(0);
+            dataArray.forEach(d => {
+                const val = d[key];
+                for(let i=0; i<bins.length; i++) {
+                    if (val >= bins[i].min && val <= bins[i].max) {
+                        counts[i]++;
+                        break;
+                    }
+                }
+            });
+            return counts;
+        }
+
+        // Chart 1: Age
+        function drawAgeChart() {
+            destroyChart('ageChart');
+            const bins = [{l:'0-20', min:0, max:20}, {l:'21-40', min:21, max:40}, {l:'41-60', min:41, max:60}, {l:'61-80', min:61, max:80}, {l:'80+', min:81, max:150}];
+            const data = getBins(filteredData, 'age', bins);
+            const avg = parseFloat(document.getElementById('kpiAvgAge').innerText);
+            
+            const ctx = document.getElementById('ageChart').getContext('2d');
+            chartInstances['ageChart'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: bins.map(b=>b.l),
+                    datasets: [{
+                        label: 'จำนวนคนไข้',
+                        data: data,
+                        backgroundColor: '#fb923c',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    plugins: { title: { display: true, text: `อายุเฉลี่ย: ${avg} ปี` } },
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Chart 2: Gender
+        function drawGenderChart() {
+            destroyChart('genderChart');
+            const counts = getFrequency(filteredData, 'gender');
+            chartInstances['genderChart'] = new Chart(document.getElementById('genderChart'), {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        data: Object.values(counts),
+                        backgroundColor: ['#3b82f6', '#ec4899', '#9ca3af']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        // Chart 3: Rights
+        function drawRightsChart() {
+            destroyChart('rightsChart');
+            const counts = getFrequency(filteredData, 'rights');
+            chartInstances['rightsChart'] = new Chart(document.getElementById('rightsChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{ label: 'จำนวน', data: Object.values(counts), backgroundColor: '#f97316' }]
+                },
+                options: { indexAxis: 'y', maintainAspectRatio: false }
+            });
+        }
+
+        // Chart 4: Diagnosis
+        function drawDiagnosisChart() {
+            destroyChart('diagnosisChart');
+            const counts = getFrequency(filteredData, 'diagnosis');
+            const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0, 5);
+            chartInstances['diagnosisChart'] = new Chart(document.getElementById('diagnosisChart'), {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(x=>x[0]),
+                    datasets: [{ label: 'เคส', data: sorted.map(x=>x[1]), backgroundColor: '#ea580c' }]
+                },
+                options: { indexAxis: 'y', maintainAspectRatio: false }
+            });
+        }
+
+        // Chart 5: Clinical Group
+        function createSimpleBar(canvasId, label, dataKey, bins) {
+            destroyChart(canvasId);
+            const data = getBins(filteredData, dataKey, bins);
+            chartInstances[canvasId] = new Chart(document.getElementById(canvasId), {
+                type: 'bar',
+                data: {
+                    labels: bins.map(b=>b.l),
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: '#fdba74',
+                        borderColor: '#ea580c',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, display: false } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function drawClinicalCharts() {
+            createSimpleBar('bpSysChart', 'BP Sys', 'bp_sys', [{l:'<120', min:0, max:119}, {l:'120-139', min:120, max:139}, {l:'>=140', min:140, max:300}]);
+            createSimpleBar('bpDiaChart', 'BP Dia', 'bp_dia', [{l:'<80', min:0, max:79}, {l:'80-89', min:80, max:89}, {l:'>=90', min:90, max:200}]);
+            createSimpleBar('bmiChart', 'BMI', 'bmi', [{l:'ผอม', min:0, max:18.4}, {l:'ปกติ', min:18.5, max:22.9}, {l:'ท้วม', min:23, max:24.9}, {l:'อ้วน', min:25, max:100}]);
+            createSimpleBar('fbsChart', 'FBS', 'fbs', [{l:'<100', min:0, max:99}, {l:'100-125', min:100, max:125}, {l:'>=126', min:126, max:500}]);
+            createSimpleBar('hba1cChart', 'HbA1c', 'hba1c', [{l:'<6.0', min:0, max:5.9}, {l:'6-7', min:6, max:6.9}, {l:'>=7', min:7, max:20}]);
+            createSimpleBar('egfrChart', 'eGFR', 'egfr', [{l:'<15 (S5)', min:0, max:14}, {l:'15-29 (S4)', min:15, max:29}, {l:'30-59 (S3)', min:30, max:59}, {l:'60-89 (S2)', min:60, max:89}, {l:'>90 (S1)', min:90, max:200}]);
+            createSimpleBar('weightChart', 'Weight', 'weight', [{l:'<50', min:0, max:49}, {l:'50-69', min:50, max:69}, {l:'70-89', min:70, max:89}, {l:'>=90', min:90, max:300}]);
+            createSimpleBar('heightChart', 'Height', 'height', [{l:'<150', min:0, max:149}, {l:'150-160', min:150, max:160}, {l:'161-170', min:161, max:170}, {l:'>170', min:171, max:250}]);
+        }
+
+        // Chart 6: Status
+        function drawStatusChart() {
+            destroyChart('statusChart');
+            const counts = getFrequency(filteredData, 'status');
+            chartInstances['statusChart'] = new Chart(document.getElementById('statusChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{ data: Object.values(counts), backgroundColor: ['#22c55e', '#ef4444', '#eab308'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        // Table 1: Tambon
+        function renderTambonTable() {
+            const counts = getFrequency(filteredData, 'tambon');
+            const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+            const tbody = document.getElementById('tambonTableBody');
+            tbody.innerHTML = '';
+            sorted.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "bg-white border-b hover:bg-gray-50";
+                const pct = ((item[1]/filteredData.length)*100).toFixed(1);
+                tr.innerHTML = `<td class="px-6 py-2 font-medium text-gray-900">${item[0]}</td><td class="px-6 py-2">${item[1]}</td><td class="px-6 py-2 text-right">${pct}%</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Table 2: Meds
+        function renderMedsTable() {
+             const counts = getFrequency(filteredData, 'meds');
+             const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+             const tbody = document.getElementById('medsTableBody');
+             tbody.innerHTML = '';
+             sorted.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "bg-white border-b hover:bg-gray-50";
+                tr.innerHTML = `<td class="px-6 py-2 font-medium text-gray-900">${item[0] || '-'}</td><td class="px-6 py-2">${item[1]}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- Admin & Login Logic ---
+        function toggleLoginModal() {
+            document.getElementById('loginModal').classList.toggle('hidden');
+        }
+
+        function checkLogin() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if (u === 'admin' && p === '1234') {
+                isAdmin = true;
+                document.getElementById('loginBtn').classList.add('hidden');
+                document.getElementById('logoutBtn').classList.remove('hidden');
+                document.getElementById('adminSection').classList.remove('hidden');
+                toggleLoginModal();
+                renderTable();
+                Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', showConfirmButton: false, timer: 1500 });
+            } else {
+                Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'Username หรือ Password ไม่ถูกต้อง' });
+            }
+        }
+
+        function logout() {
+            isAdmin = false;
+            document.getElementById('loginBtn').classList.remove('hidden');
+            document.getElementById('logoutBtn').classList.add('hidden');
+            document.getElementById('adminSection').classList.add('hidden');
+            Swal.fire('ออกจากระบบเรียบร้อย');
+        }
+
+        // --- Data Table & CRUD ---
+        function renderTable() {
+            if (!isAdmin) return;
+            const tbody = document.getElementById('patientTableBody');
+            tbody.innerHTML = '';
+            
+            const total = filteredData.length;
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = Math.min(start + itemsPerPage, total);
+            
+            document.getElementById('startIndex').innerText = start + 1;
+            document.getElementById('endIndex').innerText = end;
+            document.getElementById('totalIndex').innerText = total;
+
+            const pageData = filteredData.slice(start, end);
+
+            pageData.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = "bg-white border-b hover:bg-orange-50";
+                const originalIndex = allData.indexOf(row); // Use reference to original array
+                
+                tr.innerHTML = `
+                    <td class="px-4 py-3 font-bold">${row.id}</td>
+                    <td class="px-4 py-3">${row.name} ${row.surname}</td>
+                    <td class="px-4 py-3">${row.age}</td>
+                    <td class="px-4 py-3">${row.rights}</td>
+                    <td class="px-4 py-3">${row.diagnosis}</td>
+                    <td class="px-4 py-3">${row.bp_sys}/${row.bp_dia}</td>
+                    <td class="px-4 py-3">${row.hba1c}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs text-white ${row.status.includes('ขาด') ? 'bg-red-500' : 'bg-green-500'}">${row.status}</span></td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="openModal(${originalIndex})" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteRow(${originalIndex})" class="text-red-600 hover:text-red-800"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function prevPage() { if(currentPage > 1) { currentPage--; renderTable(); } }
+        function nextPage() { if(currentPage * itemsPerPage < filteredData.length) { currentPage++; renderTable(); } }
+
+        // --- CRUD Modals ---
+        function openModal(index = null) {
+            document.getElementById('dataModal').classList.remove('hidden');
+            if (index !== null) {
+                document.getElementById('modalTitle').innerText = "แก้ไขข้อมูล";
+                document.getElementById('editRowIndex').value = index;
+                const d = allData[index];
+                document.getElementById('inp_id').value = d.id;
+                document.getElementById('inp_name').value = d.name;
+                document.getElementById('inp_surname').value = d.surname;
+                document.getElementById('inp_age').value = d.age;
+                document.getElementById('inp_gender').value = d.gender;
+                document.getElementById('inp_tambon').value = d.tambon;
+                document.getElementById('inp_rights').value = d.rights;
+                document.getElementById('inp_diag').value = d.diagnosis;
+                document.getElementById('inp_bpsys').value = d.bp_sys;
+                document.getElementById('inp_bpdia').value = d.bp_dia;
+                document.getElementById('inp_weight').value = d.weight;
+                document.getElementById('inp_height').value = d.height;
+                document.getElementById('inp_fbs').value = d.fbs;
+                document.getElementById('inp_hba1c').value = d.hba1c;
+                document.getElementById('inp_meds').value = d.meds || '';
+                document.getElementById('inp_status').value = d.status;
+            } else {
+                document.getElementById('modalTitle').innerText = "เพิ่มข้อมูลใหม่";
+                document.getElementById('editRowIndex').value = "-1";
+                document.getElementById('dataForm').reset();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('dataModal').classList.add('hidden');
+        }
+
+        async function saveData() {
+            const idx = parseInt(document.getElementById('editRowIndex').value);
+            const w = parseFloat(document.getElementById('inp_weight').value);
+            const h = parseFloat(document.getElementById('inp_height').value);
+            const bmiVal = (w / Math.pow(h/100, 2)).toFixed(1);
+
+            const newData = {
+                id: document.getElementById('inp_id').value,
+                name: document.getElementById('inp_name').value,
+                surname: document.getElementById('inp_surname').value,
+                age: parseInt(document.getElementById('inp_age').value),
+                gender: document.getElementById('inp_gender').value,
+                tambon: document.getElementById('inp_tambon').value,
+                rights: document.getElementById('inp_rights').value,
+                diagnosis: document.getElementById('inp_diag').value,
+                bp_sys: parseInt(document.getElementById('inp_bpsys').value),
+                bp_dia: parseInt(document.getElementById('inp_bpdia').value),
+                weight: w,
+                height: h,
+                bmi: isNaN(bmiVal) ? 0 : bmiVal,
+                fbs: parseInt(document.getElementById('inp_fbs').value),
+                hba1c: parseFloat(document.getElementById('inp_hba1c').value),
+                egfr: 0, 
+                meds: document.getElementById('inp_meds').value,
+                status: document.getElementById('inp_status').value
+            };
+
+            // 1. Optimistic Update
+            if (idx === -1) {
+                allData.push(newData);
+            } else {
+                allData[idx] = { ...allData[idx], ...newData };
+            }
+            closeModal();
+            processData(allData);
+
+            // 2. Background Sync
+            syncWithGoogleSheet(idx === -1 ? 'add' : 'edit', newData);
+        }
+
+        async function deleteRow(index) {
+            Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: "ข้อมูลจะถูกลบถาวร",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'ลบข้อมูล'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const deletedItem = allData[index];
+                    allData.splice(index, 1);
+                    processData(allData);
+                    syncWithGoogleSheet('delete', { id: deletedItem.id });
+                    Swal.fire('ลบแล้ว!', 'ข้อมูลถูกลบเรียบร้อย', 'success');
+                }
+            });
+        }
+
+        // --- Backend Sync Logic ---
+        function syncWithGoogleSheet(action, payload) {
+            const formData = new FormData();
+            formData.append('action', action);
+            formData.append('data', JSON.stringify(payload));
+
+            // Use 'no-cors' mode which works for writing (POST) but cannot read response
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: formData,
+                mode: 'no-cors' 
+            }).then(() => {
+                const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                Toast.fire({ icon: 'success', title: 'ส่งข้อมูลไป Google Sheet แล้ว' });
+            }).catch(err => {
+                console.error("Sync Error", err);
+                // Suppress popup unless critical
+            });
+        }
+    </script>
+</body>
+</html>
